@@ -11,11 +11,7 @@ def test_detects_hardcoded_password_without_leaking_value():
 
 
 def test_detects_eval_exec_and_shell_true():
-    code = "\n".join([
-        "result = eval(user_input)",
-        "exec(source)",
-        "subprocess.run(command, shell=True)",
-    ])
+    code = "result = eval(user_input)\nexec(source)\nsubprocess.run(command, shell=True)"
     rule_ids = {finding.rule_id for finding in scan_code(code)}
     assert {"PY101", "PY102", "PY103"}.issubset(rule_ids)
 
