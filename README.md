@@ -1,44 +1,63 @@
-<!-- PORTFOLIO PROJECT PROFILE: maintained by the repository owner -->
+# Sky Security Audit
 
-## Project profile and code-audit snapshot
+A bounded **offline** Python source-code security auditor for a small set of explicit heuristic rules. It analyzes caller-supplied UTF-8 source files and emits structured findings without making network requests or probing external systems.
 
-**What this is:** **Py-Security-Scanner** is a public repository described as: “Basic vulnerability scanner for web applications. #SkyCoin4444 #AI #Blockchain #DevOps #Innovation” Its dominant language signals are **Python (7 files)**.
+## Implemented checks
 
-**Why it has value:** Its value is best understood through the implementation evidence currently present in the repository: **21 tracked files** were observed in the shallow audit, with the source structure and existing documentation providing the project’s specific context. This README does not treat a prototype, experiment, or archive as a production system without supporting evidence.
+Current rules flag:
+- likely hardcoded password assignments;
+- likely hardcoded secret assignments;
+- likely hardcoded API-key assignments;
+- private-key material markers;
+- Python `eval()` usage;
+- Python `exec()` usage;
+- common subprocess calls using `shell=True`.
 
-**Implementation evidence:** 3 test-related file(s) detected; 2 dependency or package manifest(s) detected; 2 build/CI/infrastructure signal(s) detected; and 3 documentation or governance file(s) detected. Test filenames observed include `tests/__init__.py`, `tests/test_main.py`, `tests/test_scanner.py`. Dependency or package files include `package.json`, `requirements.txt`. Build, CI, or infrastructure signals include `Dockerfile`, `.github/workflows/ci.yml`.
+Findings contain only severity, rule description/ID, line, and column. The scanner intentionally does **not** copy the matched source text into reports, reducing the chance that a detected credential is leaked again through logs or artifacts.
 
-**Current status:** The repository is tracked on the `main` branch. The existing source tree, configuration, tests, workflows, and documentation remain authoritative for supported behavior and maturity. A code audit is not a production-readiness certification, and the presence of a test or workflow file does not establish that all checks pass.
+Source input is bounded to 1,000,000 characters and each scan returns at most 500 findings.
 
-**Relationship to the wider portfolio:** This repository is one focused component of the broader Skyler Blue Spillers portfolio across AI, software engineering, cloud and DevOps, cybersecurity, blockchain, finance, education, social systems, and creative work. It may provide a service boundary, implementation pattern, experiment, archive, or reusable idea for related repositories. Treat repositories as technical dependencies only where documented interfaces and verified project requirements support that relationship.
+## Usage
 
-**Quality and security note:** Potential secret-like or credential-like patterns were detected in repository text and require manual review; the static scan does not prove that a real secret is exposed. The audit also located TODO/FIXME markers in 1 file(s), indicating areas that may deserve follow-up.
+```bash
+python main.py app.py another_module.py
+```
 
----
+Output is JSON. Exit status is:
+- `0` when no findings are produced;
+- `1` when one or more findings are produced;
+- `2` for file/input errors.
 
-# Py Security Scanner
+Container usage:
 
-![GitHub stars](https://img.shields.io/github/stars/skylerblue333/Py-Security-Scanner?style=flat-square)
-![GitHub license](https://img.shields.io/github/license/skylerblue333/Py-Security-Scanner?style=flat-square)
+```bash
+docker build -t sky-security-audit .
+docker run --rm -v "$PWD:/workspace:ro" sky-security-audit /workspace/app.py
+```
 
-## 🌟 Overview
-**Py-Security-Scanner** is a professional-grade project within the **SkyCoin4444** ecosystem. It focuses on delivering high-value solutions in the domain of **Python**.
+## Verification
 
-## 🚀 Key Features
-- **Scalable Architecture**: Designed for enterprise-level growth and performance.
-- **Modern Standards**: Implements best practices for clean code and maintainability.
-- **Robust Integration**: Built to work seamlessly within modern cloud-native environments.
+```bash
+python -m compileall -q main.py src tests
+ruff check main.py src tests
+pytest -q
+pip-audit -r requirements.txt
+```
 
-## 🛠️ Technology Stack
-- **Primary Domain**: Python
-- **Ecosystem**: SkyCoin4444 Digital Platform
+CI additionally builds the image and verifies non-root execution.
 
-## 📂 Structure
-The project is organized into a modular structure to ensure clarity and ease of development.
+## Security and product boundary
 
-## 👨‍💻 Author
-**Skyler Blue Spillers**
-*Professional Chess Player & Software Engineer*
+This is a defensive static-analysis helper. It does not crawl websites, enumerate endpoints, send payloads, exploit vulnerabilities, execute target code, or perform network reconnaissance. The old repository demo fabricated web findings such as exposed files; that behavior is removed.
 
----
-*Powered by SkyCoin4444*
+Heuristic pattern matches can produce false positives and false negatives. A clean result is **not** proof that code is secure. The tool is not a replacement for language-aware SAST, secret scanners, dependency scanners, code review, penetration testing, or a security assessment.
+
+## SKYCOIN4444 integration
+
+Sky Security Audit can be used as one lightweight pre-commit/CI signal for Python repositories. Integrations should treat its findings as advisory inputs alongside stronger scanners and review processes rather than as an authorization or release decision by itself.
+
+## Status
+
+**Status: Engineering Beta.** Local implementation and automated verification are being hardened; no production deployment or security certification is claimed.
+
+See `SECURITY.md` and `CHANGELOG.md` for operating boundaries and productization history.
