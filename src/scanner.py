@@ -29,13 +29,42 @@ class Rule:
 
 
 RULES: Final[tuple[Rule, ...]] = (
-    Rule("PY001", "HIGH", "Hardcoded password", re.compile(r"\bpassword\s*=\s*['\"][^'\"\n]{4,}['\"]", re.I)),
-    Rule("PY002", "HIGH", "Hardcoded secret", re.compile(r"\bsecret\s*=\s*['\"][^'\"\n]{4,}['\"]", re.I)),
-    Rule("PY003", "HIGH", "Hardcoded API key", re.compile(r"\bapi[_-]?key\s*=\s*['\"][^'\"\n]{4,}['\"]", re.I)),
-    Rule("PY004", "HIGH", "Private key material marker", re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")),
+    Rule(
+        "PY001",
+        "HIGH",
+        "Hardcoded password",
+        re.compile(r"\bpassword\s*=\s*['\"][^'\"\n]{4,}['\"]", re.IGNORECASE),
+    ),
+    Rule(
+        "PY002",
+        "HIGH",
+        "Hardcoded secret",
+        re.compile(r"\bsecret\s*=\s*['\"][^'\"\n]{4,}['\"]", re.IGNORECASE),
+    ),
+    Rule(
+        "PY003",
+        "HIGH",
+        "Hardcoded API key",
+        re.compile(r"\bapi[_-]?key\s*=\s*['\"][^'\"\n]{4,}['\"]", re.IGNORECASE),
+    ),
+    Rule(
+        "PY004",
+        "HIGH",
+        "Private key material marker",
+        re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+    ),
     Rule("PY101", "MEDIUM", "Use of eval()", re.compile(r"\beval\s*\(")),
     Rule("PY102", "MEDIUM", "Use of exec()", re.compile(r"\bexec\s*\(")),
-    Rule("PY103", "MEDIUM", "Shell execution with shell=True", re.compile(r"\b(?:subprocess\.(?:run|Popen|call)|run|Popen|call)\s*\([^\n]*\bshell\s*=\s*True", re.I)),
+    Rule(
+        "PY103",
+        "MEDIUM",
+        "Shell execution with shell=True",
+        re.compile(
+            r"\b(?:subprocess\.(?:run|Popen|call)|run|Popen|call)"
+            r"\s*\([^\n]*\bshell\s*=\s*True",
+            re.IGNORECASE,
+        ),
+    ),
 )
 
 
