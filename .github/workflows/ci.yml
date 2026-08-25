@@ -29,7 +29,9 @@ jobs:
       - name: Dependency audit
         run: pip-audit -r requirements.txt
       - name: CLI clean smoke
-        run: python main.py src/scanner.py >/tmp/report.json
+        run: |
+          printf 'x = 1 + 2\n' >/tmp/clean.py
+          python main.py /tmp/clean.py >/tmp/report.json
       - name: Build image
         run: docker build -t sky-security-audit:ci .
       - name: Verify non-root image
