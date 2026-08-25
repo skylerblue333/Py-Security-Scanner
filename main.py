@@ -1,39 +1,46 @@
-import logging
-from urllib.parse import urljoin
+from __future__ import annotations
 
-logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
+import argparse
+import json
+from pathlib import Path
 
-class WebScanner:
-    def __init__(self, target_url):
-        self.target = target_url
-        self.findings = []
-        
-    def check_headers(self):
-        logging.info(f"Scanning headers for {self.target}")
-        # Mock checking headers
-        missing_headers = ['Strict-Transport-Security', 'X-Frame-Options']
-        for h in missing_headers:
-            self.findings.append({"type": "Missing Header", "detail": h, "severity": "Medium"})
-            
-    def check_endpoints(self):
-        logging.info("Scanning common endpoints...")
-        endpoints = ['/admin', '/.git/config', '/.env']
-        for ep in endpoints:
-            # Mock finding an exposed endpoint
-            if ep == '/.env':
-                self.findings.append({"type": "Exposed File", "detail": ep, "severity": "High"})
+from src.scanner import MAX_SOURCE_CHARS, scan_code
 
-    def report(self):
-        print("\n=== Scan Report for {} ===".format(self.target))
-        if not self.findings:
-            print("No vulnerabilities found.")
-        else:
-            for f in self.findings:
-                print(f"[{f['severity']}] {f['type']}: {f['detail']}")
-        print("===========================\n")
+
+def audit_file(path: Path) -> dict[str, object]:
+    if not path.is_file():
+        raise ValueError(f"not a regular file: {path}")
+    if path.stat().st_size > MAX_SOURCE_CHARS * 4:
+        raise ValueError(f"file is too large: {path}")
+    try:
+        source = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as error:
+        raise ValueError(f"file is not valid UTF-8: {path}") from error
+    findings = scan_code(source)
+    return {
+        "path": str(path),
+        "findings": [finding.to_dict() for finding in findings],
+        "finding_count": len(findings),
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Offline bounded Python security source audit")
+    parser.add_argument("paths", nargs="+", type=Path, help="UTF-8 source files to inspect")
+    args = parser.parse_args()
+
+    reports: list[dict[str, object]] = []
+    try:
+        for path in args.paths:
+            reports.append(audit_file(path))
+    except (OSError, ValueError) as error:
+        print(json.dumps({"error": str(error)}))
+        return 2
+
+    finding_count = sum(int(report["finding_count"]) for report in reports)
+    print(json.dumps({"reports": reports, "finding_count": finding_count}, sort_keys=True))
+    return 1 if finding_count else 0
+
 
 if __name__ == "__main__":
-    scanner = WebScanner("https://example.com")
-    scanner.check_headers()
-    scanner.check_endpoints()
-    scanner.report()
+    raise SystemExit(main())
