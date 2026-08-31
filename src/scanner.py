@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import re
 from dataclasses import asdict, dataclass
 from typing import Final
@@ -55,17 +56,46 @@ RULES: Final[tuple[Rule, ...]] = (
     ),
     Rule("PY101", "MEDIUM", "Use of eval()", re.compile(r"\beval\s*\(")),
     Rule("PY102", "MEDIUM", "Use of exec()", re.compile(r"\bexec\s*\(")),
-    Rule(
-        "PY103",
-        "MEDIUM",
-        "Shell execution with shell=True",
-        re.compile(
-            r"\b(?:subprocess\.(?:run|Popen|call)|run|Popen|call)"
-            r"\s*\([^\n]*\bshell\s*=\s*True",
-            re.IGNORECASE,
-        ),
-    ),
 )
+
+_SUBPROCESS_CALLS: Final = {"run", "Popen", "call"}
+
+
+def _shell_true_findings(code: str) -> list[Finding]:
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return []
+
+    findings: list[Finding] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        name: str | None = None
+        if isinstance(node.func, ast.Name):
+            name = node.func.id
+        elif isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
+            if node.func.value.id == "subprocess":
+                name = node.func.attr
+        if name not in _SUBPROCESS_CALLS:
+            continue
+        if not any(
+            keyword.arg == "shell"
+            and isinstance(keyword.value, ast.Constant)
+            and keyword.value.value is True
+            for keyword in node.keywords
+        ):
+            continue
+        findings.append(
+            Finding(
+                severity="MEDIUM",
+                rule="Shell execution with shell=True",
+                rule_id="PY103",
+                line=node.lineno,
+                column=node.col_offset + 1,
+            )
+        )
+    return findings
 
 
 def scan_code(code: str) -> list[Finding]:
@@ -91,4 +121,9 @@ def scan_code(code: str) -> list[Finding]:
             )
             if len(findings) >= MAX_FINDINGS:
                 return findings
+
+    for finding in _shell_true_findings(code):
+        findings.append(finding)
+        if len(findings) >= MAX_FINDINGS:
+            return findings
     return findings
