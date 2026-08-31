@@ -16,6 +16,14 @@ def test_detects_eval_exec_and_shell_true():
     assert {"PY101", "PY102", "PY103"}.issubset(rule_ids)
 
 
+def test_detects_multiline_shell_true():
+    code = "subprocess.run(\n    command,\n    shell=True,\n)\n"
+    findings = [finding for finding in scan_code(code) if finding.rule_id == "PY103"]
+    assert len(findings) == 1
+    assert findings[0].line == 1
+    assert findings[0].column == 1
+
+
 def test_detects_private_key_marker():
     findings = scan_code("-----BEGIN PRIVATE KEY-----")
     assert findings[0].severity == "HIGH"
