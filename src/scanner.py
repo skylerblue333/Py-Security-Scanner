@@ -59,25 +59,83 @@ RULES: Final[tuple[Rule, ...]] = (
 )
 
 _SUBPROCESS_CALLS: Final = {"run", "Popen", "call"}
+_LEGACY_SHELL_CALL: Final = re.compile(
+    r"\b(?:subprocess\.(?:run|Popen|call)|run|Popen|call)"
+    r"\s*\([^\n]*\bshell\s*=\s*True",
+    re.IGNORECASE,
+)
+
+
+def _finding(line: int, column: int) -> Finding:
+    return Finding(
+        severity="MEDIUM",
+        rule="Shell execution with shell=True",
+        rule_id="PY103",
+        line=line,
+        column=column,
+    )
+
+
+def _fallback_shell_true_findings(code: str) -> list[Finding]:
+    findings: list[Finding] = []
+    for line_number, line in enumerate(code.splitlines(), start=1):
+        match = _LEGACY_SHELL_CALL.search(line)
+        if match is not None:
+            findings.append(_finding(line_number, match.start() + 1))
+    return findings
+
+
+def _subprocess_names(tree: ast.AST) -> tuple[set[str], set[str]]:
+    module_names = {"subprocess"}
+    direct_calls = set(_SUBPROCESS_CALLS)
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for imported in node.names:
+                if imported.name == "subprocess":
+                    module_names.add(imported.asname or imported.name)
+        elif isinstance(node, ast.ImportFrom) and node.module == "subprocess":
+            for imported in node.names:
+                if imported.name in _SUBPROCESS_CALLS:
+                    direct_calls.add(imported.asname or imported.name)
+
+    return module_names, direct_calls
+
+
+def _character_column(lines: list[str], node: ast.AST) -> int:
+    line_number = getattr(node, "lineno", 1)
+    byte_column = getattr(node, "col_offset", 0)
+    if line_number < 1 or line_number > len(lines):
+        return byte_column + 1
+    prefix = lines[line_number - 1].encode("utf-8")[:byte_column]
+    return len(prefix.decode("utf-8")) + 1
 
 
 def _shell_true_findings(code: str) -> list[Finding]:
     try:
         tree = ast.parse(code)
     except SyntaxError:
-        return []
+        return _fallback_shell_true_findings(code)
 
+    module_names, direct_calls = _subprocess_names(tree)
+    lines = code.splitlines()
     findings: list[Finding] = []
+
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
+
         name: str | None = None
-        if isinstance(node.func, ast.Name):
+        if isinstance(node.func, ast.Name) and node.func.id in direct_calls:
             name = node.func.id
-        elif isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
-            if node.func.value.id == "subprocess":
-                name = node.func.attr
-        if name not in _SUBPROCESS_CALLS:
+        elif (
+            isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id in module_names
+        ):
+            name = node.func.attr
+
+        if name not in _SUBPROCESS_CALLS and name not in direct_calls:
             continue
         if not any(
             keyword.arg == "shell"
@@ -86,15 +144,9 @@ def _shell_true_findings(code: str) -> list[Finding]:
             for keyword in node.keywords
         ):
             continue
-        findings.append(
-            Finding(
-                severity="MEDIUM",
-                rule="Shell execution with shell=True",
-                rule_id="PY103",
-                line=node.lineno,
-                column=node.col_offset + 1,
-            )
-        )
+
+        findings.append(_finding(node.lineno, _character_column(lines, node)))
+
     return findings
 
 
