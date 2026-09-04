@@ -6,16 +6,24 @@ from pathlib import Path
 
 from src.scanner import MAX_SOURCE_CHARS, scan_code
 
+MAX_SOURCE_BYTES = MAX_SOURCE_CHARS * 4
 
-def audit_file(path: Path) -> dict[str, object]:
+
+def _read_bounded_utf8(path: Path) -> str:
     if not path.is_file():
         raise ValueError(f"not a regular file: {path}")
-    if path.stat().st_size > MAX_SOURCE_CHARS * 4:
+    with path.open("rb") as handle:
+        data = handle.read(MAX_SOURCE_BYTES + 1)
+    if len(data) > MAX_SOURCE_BYTES:
         raise ValueError(f"file is too large: {path}")
     try:
-        source = path.read_text(encoding="utf-8")
+        return data.decode("utf-8")
     except UnicodeDecodeError as error:
         raise ValueError(f"file is not valid UTF-8: {path}") from error
+
+
+def audit_file(path: Path) -> dict[str, object]:
+    source = _read_bounded_utf8(path)
     findings = scan_code(source)
     return {
         "path": str(path),

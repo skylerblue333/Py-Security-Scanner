@@ -16,6 +16,37 @@ def test_detects_eval_exec_and_shell_true():
     assert {"PY101", "PY102", "PY103"}.issubset(rule_ids)
 
 
+def test_detects_multiline_shell_true():
+    code = "subprocess.run(\n    command,\n    shell=True,\n)\n"
+    findings = [finding for finding in scan_code(code) if finding.rule_id == "PY103"]
+    assert len(findings) == 1
+    assert findings[0].line == 1
+    assert findings[0].column == 1
+
+
+def test_detects_subprocess_aliases():
+    code = "import subprocess as sp\nsp.run(command, shell=True)\n"
+    findings = [finding for finding in scan_code(code) if finding.rule_id == "PY103"]
+    assert len(findings) == 1
+    assert findings[0].line == 2
+    assert findings[0].column == 1
+
+
+def test_preserves_shell_detection_when_ast_parse_fails():
+    code = "subprocess.run(command, shell=True)\nif (\n"
+    findings = [finding for finding in scan_code(code) if finding.rule_id == "PY103"]
+    assert len(findings) == 1
+    assert findings[0].line == 1
+    assert findings[0].column == 1
+
+
+def test_reports_unicode_columns_as_character_positions():
+    code = 'é = "x"; subprocess.run(command, shell=True)\n'
+    findings = [finding for finding in scan_code(code) if finding.rule_id == "PY103"]
+    assert len(findings) == 1
+    assert findings[0].column == 10
+
+
 def test_detects_private_key_marker():
     findings = scan_code("-----BEGIN PRIVATE KEY-----")
     assert findings[0].severity == "HIGH"
